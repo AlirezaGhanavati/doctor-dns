@@ -62,7 +62,7 @@ variables = "\n".join(re.findall(
     LOGIC, re.M))
 names = ["tunnel_transport_ok", "tunnel_preset_ok", "tunnel_tuning", "tunnel_port_problem",
          "parse_tunnel_spec",
-         "tunnel_token", "tunnel_toml", "ask_tunnel"]
+         "tunnel_token", "tunnel_pair_token", "tunnel_toml", "ask_tunnel"]
 bodies = [function(n) for n in names]
 check("the tunnel's functions are all in the installer", all(bodies),
       str([n for n, b in zip(names, bodies) if not b]))

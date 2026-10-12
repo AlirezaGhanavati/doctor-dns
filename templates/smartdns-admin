@@ -1937,7 +1937,14 @@ def tunnel_port_problem(port, ip, direction, to=None):
     return ""
 
 
-def tunnel_token(secret):
+def tunnel_token(secret, spec=None, relay="", far=""):
+    """The tunnel's token, from the secret both ends share. An xdi tunnel's
+    is its pair's own - the relay's address and the far end's in it - since
+    xdi tells its pings from another tunnel's by a tag made from the token:
+    two xdi tunnels on one machine with one token took each other's pings,
+    and neither carried. The installer's tunnel_pair_token, the same way."""
+    if spec and spec.get("transport") == "xdi":
+        secret = "%s:%s:%s" % (secret, relay, far)
     return hashlib.sha256(("doctor-dns-tunnel:%s" % secret).encode()).hexdigest()[:48]
 
 
@@ -2058,12 +2065,12 @@ tunnelPick(document.currentScript.previousElementSibling);
 
 def exit_tunnel_toml(ip, spec, secret, where):
     out = ["# written by the doctor dns admin panel - its relays card changes it\n"]
+    token = tunnel_token(secret, spec, ip, exit_address())
     if spec["direction"] == "l3":
         theirs, mine, iface = l3_block(ip)
         out.append('[l3]\nmode = "listen"\naddr = "0.0.0.0:%d"\nlocal_ip = "%s/30"\n'
                    'peer_ip = "%s"\ncarrier = "%s"\niface = "%s"\ntoken = "%s"\n'
-                   % (spec["port"], mine, theirs, spec["transport"], iface,
-                      tunnel_token(secret)))
+                   % (spec["port"], mine, theirs, spec["transport"], iface, token))
         out.append(tunnel_tuning(spec, "l3"))
         return "".join(out)
     if spec["direction"] == "reverse":
@@ -2077,7 +2084,7 @@ def exit_tunnel_toml(ip, spec, secret, where):
                                 "-days", "3650", "-subj", "/CN=localhost", "-keyout", k,
                                 "-out", c], capture_output=True, timeout=60)
             out.append('tls_cert = "%s"\ntls_key = "%s"\n' % (c, k))
-    out.append('transport = "%s"\ntoken = "%s"\n' % (spec["transport"], tunnel_token(secret)))
+    out.append('transport = "%s"\ntoken = "%s"\n' % (spec["transport"], token))
     out.append(tunnel_tuning(spec, "client" if spec["direction"] == "reverse" else "direct"))
     if spec["direction"] == "reverse":
         out.append('web_port = 0\nskip_optz = true\nlog_level = "info"\n')

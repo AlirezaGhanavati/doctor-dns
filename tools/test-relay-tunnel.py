@@ -103,7 +103,7 @@ if bash:
               ("through the tunnel" if tunnel else "straight"),
               got == sync.exit_conf_text("203.0.113.9", tunnel), got)
     toml = func(logic, "tunnel_toml") + func(logic, "tunnel_tuning")
-    tok = func(logic, "tunnel_token")
+    tok = func(logic, "tunnel_token") + func(logic, "tunnel_pair_token")
     for direction, transport in (("reverse", "stealth"), ("direct", "tcp"), ("reverse", "kcp")):
         got = installer(consts + "\n" + tok + toml + "\nROLE=relay\nEXIT_IP=203.0.113.9\n"
                         "TUNNEL_DIRECTION=%s\nTUNNEL_TRANSPORT=%s\nTUNNEL_PORT=8444\n"
@@ -319,9 +319,10 @@ check("a good one is saved, with this exit's address for the relay",
       not got.startswith("nodes?m=!") and saved == {"transport": "xdi", "direction": "l3",
                                                        "port": 9000, "exit": "203.0.113.9"}, got)
 toml = open(os.path.join(where, "tunnel.toml")).read()
-check("  this end: listening for that relay, on the shared token",
+check("  this end: listening for that relay, on the token of this relay and this exit",
       'mode = "listen"' in toml and 'addr = "0.0.0.0:9000"' in toml
-      and 'token = "%s"' % sync.tunnel_token("s3cret") in toml)
+      and 'token = "%s"' % sync.tunnel_token("s3cret", {"transport": "xdi"}, "198.51.100.2",
+                                             "203.0.113.9") in toml)
 check("  its port answering that relay only",
       "ip saddr != 198.51.100.2 drop" in open(admin.tunnel_nft_path("198.51.100.2")).read())
 check("  and its own BackPack started",

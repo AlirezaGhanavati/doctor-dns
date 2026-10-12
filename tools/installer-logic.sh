@@ -38,7 +38,7 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 # What this file is. Written to the machine once an install finishes, so the
 # next run can tell whether it is an upgrade, a re-run, or somebody about to
 # put an older version over a newer one by accident.
-VERSION="0.10.6"
+VERSION="0.10.7"
 
 # What this install did, so uninstall can undo exactly that and nothing more.
 # Without it, removal would be guesswork: whether dnsmasq was ours or already
@@ -530,6 +530,15 @@ parse_tunnel_spec() {
 # there is nothing new to copy between them.
 tunnel_token() { printf 'doctor-dns-tunnel:%s' "$1" | sha256sum | cut -c1-48; }
 
+# An xdi tunnel's token is its pair's own: xdi tells its pings from another
+# tunnel's by a tag made from the token, and two xdi tunnels on one machine
+# with one token took each other's pings. smartdns-sync and the admin panel
+# make it the same way (tunnel_token there).
+tunnel_pair_token() {
+    if [ "$TUNNEL_TRANSPORT" = xdi ]; then tunnel_token "$1:$RELAY_IP:$EXIT_IP"
+    else tunnel_token "$1"; fi
+}
+
 ask_tunnel() {
     local a list="" i=0 t note
     # What this machine has now, when there is one, is the answer enter gives:
@@ -722,7 +731,7 @@ exit_upstreams() {
 # The tunnel's config for this end, on stdout.
 tunnel_toml() {
     local token c="" k=""
-    token="$(tunnel_token "$1")"
+    token="$(tunnel_pair_token "$1")"
     # wss on the listening end wants a certificate: the machine's own if it has
     # a domain, a self-signed one if not. The other end does not verify it -
     # BackPack proves the token inside the TLS session instead.

@@ -60,6 +60,7 @@ def posix(path):
 
 sync = load("templates/smartdns-sync", "sync")
 admin = load("templates/smartdns-admin", "admin")
+admin.exit_address = lambda: "203.0.113.9"
 panel = load("templates/smartdns-panel", "panel")
 LOGIC = open(os.path.join(HERE, "installer-logic.sh"), encoding="utf-8").read()
 RELAY, EXIT, SECRET = "198.51.100.7", "203.0.113.9", "s3cret"
@@ -98,7 +99,7 @@ if BASH:
         fh.write(variables + "\n")
         for n in ("l3_block", "tunnel_transport_ok", "tunnel_preset_ok", "tunnel_tuning",
                   "tunnel_port_problem", "parse_tunnel_spec",
-                  "tunnel_token", "tunnel_toml", "ask_tunnel"):
+                  "tunnel_token", "tunnel_pair_token", "tunnel_toml", "ask_tunnel"):
             fh.write(function(n) + "\n")
         fh.write('eval "$1"\n')
 
@@ -155,7 +156,7 @@ check("the two ends' addresses, crossed", r["local_ip"] == mine + "/30" and r["p
       and e["local_ip"] == theirs + "/30" and e["peer_ip"] == mine)
 check("  the same carrier, interface and token at both",
       (r["carrier"], r["iface"], r["token"]) == (e["carrier"], e["iface"], e["token"]) == (
-          "xdi", iface, sync.tunnel_token(SECRET)))
+          "xdi", iface, sync.tunnel_token(SECRET, spec, RELAY, EXIT)))
 check("  no reverse or direct table beside it, and no KCP knobs - they are not this kind's",
       set(tomllib.loads(sync.tunnel_toml_text(spec, EXIT, SECRET))) == {"l3"}
       and not any(k.startswith("kcp_") for k in r))
@@ -199,7 +200,13 @@ check("the node listens, the two ends' addresses crossed, the same carrier, inte
       and r["local_ip"] == nmine + "/30" and r["peer_ip"] == ntheirs
       and n["local_ip"] == ntheirs + "/30" and n["peer_ip"] == nmine
       and (r["carrier"], r["iface"], r["token"]) == (n["carrier"], n["iface"], n["token"])
-      == ("xdi", niface, sync.tunnel_token(SECRET)))
+      == ("xdi", niface, sync.tunnel_token(SECRET, spec, RELAY, NODE)))
+check("an xdi tunnel's token is its pair's own: the relay's to its exit and to a node differ,"
+      " and another relay's to the same exit too - xdi tags its pings with it",
+      len({sync.tunnel_token(SECRET, spec, RELAY, EXIT), sync.tunnel_token(SECRET, spec, RELAY, NODE),
+           sync.tunnel_token(SECRET, spec, "192.0.2.45", EXIT)}) == 3
+      and sync.tunnel_token(SECRET, dict(spec, transport="pck"), RELAY, EXIT)
+      == sync.tunnel_token(SECRET))
 check("  its own block and interface on the relay, beside the one to the main exit",
       sync.l3_block(RELAY, NODE)[0] != sync.l3_block(RELAY)[0] and niface != iface
       and sync.l3_block(RELAY, NODE) != sync.l3_block(RELAY, "192.0.2.81"))

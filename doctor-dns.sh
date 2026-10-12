@@ -38,7 +38,7 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 # What this file is. Written to the machine once an install finishes, so the
 # next run can tell whether it is an upgrade, a re-run, or somebody about to
 # put an older version over a newer one by accident.
-VERSION="0.10.6"
+VERSION="0.10.7"
 
 # What this install did, so uninstall can undo exactly that and nothing more.
 # Without it, removal would be guesswork: whether dnsmasq was ours or already
@@ -530,6 +530,15 @@ parse_tunnel_spec() {
 # there is nothing new to copy between them.
 tunnel_token() { printf 'doctor-dns-tunnel:%s' "$1" | sha256sum | cut -c1-48; }
 
+# An xdi tunnel's token is its pair's own: xdi tells its pings from another
+# tunnel's by a tag made from the token, and two xdi tunnels on one machine
+# with one token took each other's pings. smartdns-sync and the admin panel
+# make it the same way (tunnel_token there).
+tunnel_pair_token() {
+    if [ "$TUNNEL_TRANSPORT" = xdi ]; then tunnel_token "$1:$RELAY_IP:$EXIT_IP"
+    else tunnel_token "$1"; fi
+}
+
 ask_tunnel() {
     local a list="" i=0 t note
     # What this machine has now, when there is one, is the answer enter gives:
@@ -722,7 +731,7 @@ exit_upstreams() {
 # The tunnel's config for this end, on stdout.
 tunnel_toml() {
     local token c="" k=""
-    token="$(tunnel_token "$1")"
+    token="$(tunnel_pair_token "$1")"
     # wss on the listening end wants a certificate: the machine's own if it has
     # a domain, a self-signed one if not. The other end does not verify it -
     # BackPack proves the token inside the TLS session instead.
@@ -14899,7 +14908,14 @@ exit 0
 #TUNNEL_REPORT = {"state": None}
 #
 #
-#def tunnel_token(secret):
+#def tunnel_token(secret, spec=None, relay="", far=""):
+#    """The tunnel's token, from the secret both ends share. An xdi tunnel's
+#    is its pair's own - the relay's address and the far end's in it - since
+#    xdi tells its pings from another tunnel's by a tag made from the token:
+#    two xdi tunnels on one machine with one token took each other's pings,
+#    and neither carried. The installer's tunnel_pair_token, the same way."""
+#    if spec and spec.get("transport") == "xdi":
+#        secret = "%s:%s:%s" % (secret, relay, far)
 #    return hashlib.sha256(("doctor-dns-tunnel:%s" % secret).encode()).hexdigest()[:48]
 #
 #
@@ -15064,12 +15080,14 @@ exit 0
 #        carried = list(TUNNEL_PORTS[:2]) + [("api", API_TUNNEL_PORT, API_PORT)] + list(TUNNEL_PORTS[2:])
 #    ports = ", ".join('"127.0.0.1:%d=%d"' % (local, port) for _, local, port in carried)
 #    out = ["# written by doctor dns: the installer, or the admin panel's relays card\n"]
+#    me = (CFG or {}).get("SELF_IP") or ""
+#    token = tunnel_token(secret, spec, me, exit_ip)
 #    if spec["direction"] == "l3":
-#        mine, theirs, iface = l3_block((CFG or {}).get("SELF_IP") or "", exit_ip if node else None)
+#        mine, theirs, iface = l3_block(me, exit_ip if node else None)
 #        out.append('[l3]\nmode = "dial"\naddr = "%s:%d"\nlocal_ip = "%s/30"\npeer_ip = "%s"\n'
 #                   'ports = [%s]\ncarrier = "%s"\niface = "%s"\ntoken = "%s"\n'
 #                   % (exit_ip, spec["port"], mine, theirs, ports, spec["transport"], iface,
-#                      tunnel_token(secret)))
+#                      token))
 #        out.append(tunnel_tuning(spec, "l3"))
 #        return "".join(out)
 #    if spec["direction"] == "reverse":
@@ -15079,7 +15097,7 @@ exit 0
 #    else:
 #        out.append('[direct]\nrole = "iran"\naddr = "%s:%d"\nports = [%s]\n'
 #                   % (exit_ip, spec["port"], ports))
-#    out.append('transport = "%s"\ntoken = "%s"\n' % (spec["transport"], tunnel_token(secret)))
+#    out.append('transport = "%s"\ntoken = "%s"\n' % (spec["transport"], token))
 #    out.append(tunnel_tuning(spec, "server" if spec["direction"] == "reverse" else "direct"))
 #    if spec["direction"] == "reverse":
 #        out.append('web_port = 0\nskip_optz = true\nlog_level = "info"\n')
@@ -15611,11 +15629,13 @@ exit 0
 #def exit_side_toml(relay, spec, secret, where):
 #    """A node's end of a relay's tunnel - the exit's, word for word."""
 #    out = ["# written by doctor dns: the admin panel's relays card\n"]
+#    me = (CFG or {}).get("SELF_IP") or ""
+#    token = tunnel_token(secret, spec, relay, me)
 #    if spec["direction"] == "l3":
-#        theirs, mine, iface = l3_block(relay, (CFG or {}).get("SELF_IP") or "")
+#        theirs, mine, iface = l3_block(relay, me)
 #        out.append('[l3]\nmode = "listen"\naddr = "0.0.0.0:%d"\nlocal_ip = "%s/30"\n'
 #                   'peer_ip = "%s"\ncarrier = "%s"\niface = "%s"\ntoken = "%s"\n'
-#                   % (spec["port"], mine, theirs, spec["transport"], iface, tunnel_token(secret)))
+#                   % (spec["port"], mine, theirs, spec["transport"], iface, token))
 #        out.append(tunnel_tuning(spec, "l3"))
 #        return "".join(out)
 #    if spec["direction"] == "reverse":
@@ -15629,7 +15649,7 @@ exit 0
 #                sh("openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "3650",
 #                   "-subj", "/CN=localhost", "-keyout", k, "-out", c)
 #            out.append('tls_cert = "%s"\ntls_key = "%s"\n' % (c, k))
-#    out.append('transport = "%s"\ntoken = "%s"\n' % (spec["transport"], tunnel_token(secret)))
+#    out.append('transport = "%s"\ntoken = "%s"\n' % (spec["transport"], token))
 #    out.append(tunnel_tuning(spec, "client" if spec["direction"] == "reverse" else "direct"))
 #    if spec["direction"] == "reverse":
 #        out.append('web_port = 0\nskip_optz = true\nlog_level = "info"\n')
@@ -22312,7 +22332,14 @@ exit 0
 #    return ""
 #
 #
-#def tunnel_token(secret):
+#def tunnel_token(secret, spec=None, relay="", far=""):
+#    """The tunnel's token, from the secret both ends share. An xdi tunnel's
+#    is its pair's own - the relay's address and the far end's in it - since
+#    xdi tells its pings from another tunnel's by a tag made from the token:
+#    two xdi tunnels on one machine with one token took each other's pings,
+#    and neither carried. The installer's tunnel_pair_token, the same way."""
+#    if spec and spec.get("transport") == "xdi":
+#        secret = "%s:%s:%s" % (secret, relay, far)
 #    return hashlib.sha256(("doctor-dns-tunnel:%s" % secret).encode()).hexdigest()[:48]
 #
 #
@@ -22433,12 +22460,12 @@ exit 0
 #
 #def exit_tunnel_toml(ip, spec, secret, where):
 #    out = ["# written by the doctor dns admin panel - its relays card changes it\n"]
+#    token = tunnel_token(secret, spec, ip, exit_address())
 #    if spec["direction"] == "l3":
 #        theirs, mine, iface = l3_block(ip)
 #        out.append('[l3]\nmode = "listen"\naddr = "0.0.0.0:%d"\nlocal_ip = "%s/30"\n'
 #                   'peer_ip = "%s"\ncarrier = "%s"\niface = "%s"\ntoken = "%s"\n'
-#                   % (spec["port"], mine, theirs, spec["transport"], iface,
-#                      tunnel_token(secret)))
+#                   % (spec["port"], mine, theirs, spec["transport"], iface, token))
 #        out.append(tunnel_tuning(spec, "l3"))
 #        return "".join(out)
 #    if spec["direction"] == "reverse":
@@ -22452,7 +22479,7 @@ exit 0
 #                                "-days", "3650", "-subj", "/CN=localhost", "-keyout", k,
 #                                "-out", c], capture_output=True, timeout=60)
 #            out.append('tls_cert = "%s"\ntls_key = "%s"\n' % (c, k))
-#    out.append('transport = "%s"\ntoken = "%s"\n' % (spec["transport"], tunnel_token(secret)))
+#    out.append('transport = "%s"\ntoken = "%s"\n' % (spec["transport"], token))
 #    out.append(tunnel_tuning(spec, "client" if spec["direction"] == "reverse" else "direct"))
 #    if spec["direction"] == "reverse":
 #        out.append('web_port = 0\nskip_optz = true\nlog_level = "info"\n')
