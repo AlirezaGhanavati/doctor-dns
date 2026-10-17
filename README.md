@@ -1,4 +1,4 @@
-<h2 align="center">تقدیم به حدیث❤️ که منو تو اولین پروژم یاری و تحمل کرد</h2>
+
 
 # doctor dns
 
@@ -848,13 +848,7 @@ Long live free internet🌐
 
 </div>
 
-<div align="center">
-
-| | |
-|:--|:--|
-| **TON** | `UQAh8oTWt8ec-q4I1zxga1sUYmKmvcQKGDYwspDrsGmUlQKI` |
-| **Tether — BEP20** | `0x8aE738721Ca6Fd9a8a375Df3AC4A144ed5695355` |
-| **Tether — TRON (TRC20)** | `TPiyEnb41qTZz8eM6eqnRwXbPXBZCNS1pm` |
+<div align="center"
 
 </div>
 <a href="https://coffeebede.com/agentmehdi47"><img class="img-fluid" src="https://coffeebede.ir/DashboardTemplateV2/app-assets/images/banner/default-yellow.svg" /></a>
